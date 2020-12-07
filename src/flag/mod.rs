@@ -5,11 +5,12 @@ use std::collections::HashMap;
 use std::any::{Any};
 use std::fmt::Display;
 
-type FromString<V: Any> = fn(value: String) -> V;
+type FlagResult = Result<(), String>;
+type Assign = fn(a: Rc<RefCell<dyn Any>>, value: String) -> FlagResult;
 
 struct Item<V: Any + Display> {
     value: Rc<RefCell<V>>,
-    from: FromString<V>,
+    assign: Assign,
     desc: String,
     is: bool
 }
@@ -19,22 +20,39 @@ pub struct Flag<V: Any + Display> {
     keys: HashMap<String, Item<V>>
 }
 
+fn string_assign(a: Rc<RefCell<dyn Any>>, value: String) -> FlagResult {
+    match (*a.borrow_mut()).downcast_mut::<String>() {
+        Some(v) => {
+            *v = value;
+            Ok(())
+        },
+        None => {
+            FlagResult::Err(String::from(""))
+        }
+    }
+}
+
 impl<V: Any + Display> Flag<V> {
     pub fn register(&mut self, key: String, default: V
-        , from: FromString<V>) -> Rc<RefCell<V>> {
-        self.register_with_desc(key, default, from, String::from(""))
+        , assign: Assign) -> Rc<RefCell<V>> {
+        self.register_with_desc(key, default, assign, String::from(""))
     }
 
     pub fn register_with_desc(&mut self, key: String, default: V
-        , from: FromString<V>, desc: String) -> Rc<RefCell<V>> {
+        , assign: Assign, desc: String) -> Rc<RefCell<V>> {
         let r = Rc::new(RefCell::new(default));
         self.keys.insert(key.to_string(), Item{
             value: r.clone(),
-            from: from,
+            assign: assign,
             desc: desc.to_string(),
             is: false
         });
         r
+    }
+
+    pub fn reg_string(&mut self, key: String, default: V
+        , assign: Assign, desc: String) -> Rc<RefCell<V>> {
+        self.register_with_desc(key, default, string_assign, desc)
     }
 
     pub fn has(&self, key: &str) -> bool {
@@ -68,13 +86,20 @@ impl<V: Any + Display> Flag<V> {
                 None => {
                     if is_find == true {
                         if let Some(r) = self.keys.get_mut(&last_key) {
-                            *(*r.value).borrow_mut() = (r.from)(arg);
+                            if let Err(e) = (r.assign)(r.value.clone(), arg) {
+                                self.panic(e);
+                            };
                         }
                     }
                     is_find = false;
                 }
             }
         }
+    }
+
+    fn panic(&self, msg: String) {
+        println!("{}", msg);
+        std::process::exit(0);
     }
 
     fn printHelp(&self) {
