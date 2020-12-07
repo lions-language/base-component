@@ -1,6 +1,7 @@
 use std::env;
 use std::rc::Rc;
-use std::cell::RefCell;
+#![feature(refcell_take)]
+use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::any::{Any};
 use std::fmt::Display;
@@ -19,6 +20,15 @@ pub struct Flag<V: Any + Display> {
     help: String,
     keys: HashMap<String, Item<V>>
 }
+
+/*
+struct Str(Rc<RefCell<dyn Any>>);
+impl Str {
+    pub fn take(self) -> String {
+        (*self.0).take().downcast_ref::<String>()
+    }
+}
+*/
 
 fn string_assign(a: Rc<RefCell<dyn Any>>, value: String) -> FlagResult {
     match (*a.borrow_mut()).downcast_mut::<String>() {
@@ -50,8 +60,7 @@ impl<V: Any + Display> Flag<V> {
         r
     }
 
-    pub fn reg_string(&mut self, key: String, default: V
-        , assign: Assign, desc: String) -> Rc<RefCell<V>> {
+    pub fn reg_string(&mut self, key: String, default: V, desc: String) -> Rc<RefCell<V>> {
         self.register_with_desc(key, default, string_assign, desc)
     }
 
