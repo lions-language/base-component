@@ -137,7 +137,7 @@ macro_rules! read_u32 {
 #[macro_export]
 macro_rules! read_string {
     ($v:ident) => {
-        $v.borrow()
+        &*$v.borrow()
     }
 }
 
