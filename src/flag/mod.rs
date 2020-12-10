@@ -6,7 +6,7 @@ use std::collections::HashMap;
 struct Item {
     value: Rc<RefCell<String>>,
     desc: String,
-    is: bool
+    is: bool,
 }
 
 pub struct Flag {
@@ -15,27 +15,39 @@ pub struct Flag {
     is_warning: bool
 }
 
+pub struct Value {
+    v: Rc<RefCell<String>>
+}
+
+impl Value {
+    fn new(v: Rc<RefCell<String>>) -> Self {
+        Self {
+            v: v
+        }
+    }
+}
+
 impl Flag {
-    pub fn register(&mut self, key: String, default: String) -> Rc<RefCell<String>> {
+    pub fn register(&mut self, key: String, default: String) -> Value {
         self.register_with_desc(key, default, String::from(""))
     }
 
     pub fn register_with_desc(&mut self, key: String, default: String
-        , desc: String) -> Rc<RefCell<String>> {
+        , desc: String) -> Value {
         let r = Rc::new(RefCell::new(default));
         self.keys.insert(key.to_string(), Item{
             value: r.clone(),
             desc: desc,
             is: false
         });
-        r
+        Value::new(r)
     }
 
-    pub fn reg_string(&mut self, key: String, default: String, desc: String) -> Rc<RefCell<String>> {
+    pub fn reg_string(&mut self, key: String, default: String, desc: String) -> Value {
         self.register_with_desc(key, default, desc)
     }
 
-    pub fn reg_u32(&mut self, key: String, default: u32, desc: String) -> Rc<RefCell<String>> {
+    pub fn reg_u32(&mut self, key: String, default: u32, desc: String) -> Value {
         self.register_with_desc(key, default.to_string(), desc)
     }
 
@@ -129,7 +141,7 @@ impl Flag {
 #[macro_export]
 macro_rules! read {
     ($v:ident, $typ:ident) => {
-        match $v.borrow().parse::<$typ>() {
+        match $v.v.borrow().parse::<$typ>() {
             Ok(v) => v,
             Err(_) => {
                 println!("[ERROR] file: {}, line: {}, var \"{}\": to {} error"
@@ -157,7 +169,7 @@ macro_rules! read_u32 {
 #[macro_export]
 macro_rules! read_string {
     ($v:ident) => {
-        &*$v.borrow()
+        &*$v.v.borrow()
     }
 }
 
