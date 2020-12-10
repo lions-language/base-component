@@ -11,7 +11,8 @@ struct Item {
 
 pub struct Flag {
     help: String,
-    keys: HashMap<String, Item>
+    keys: HashMap<String, Item>,
+    is_warning: bool
 }
 
 impl Flag {
@@ -48,48 +49,14 @@ impl Flag {
         v.is
     }
 
-    pub fn parse2(&mut self) {
-        let args = env::args();
-        let args_len = args.len();
-        let mut is_find = false;
-        let mut last_key = "".to_string();
-        for (index, arg) in args.enumerate() {
-            if arg == self.help {
-                self.print_help();
-                self.exit();
-            }
-            match self.keys.get(&arg) {
-                Some(field) => {
-                    is_find = true;
-                    last_key = arg;
-                    if let Some(r) = self.keys.get_mut(&last_key) {
-                        r.is = true;
-                    };
-                },
-                None => {
-                    if is_find == true {
-                        if let Some(r) = self.keys.get_mut(&last_key) {
-                            *r.value.borrow_mut() = arg;
-                        }
-                    }
-                    is_find = false;
-                }
-            }
-        }
-    }
-
     pub fn parse(&mut self) {
         let args = env::args();
         let mut index = 0;
         let mut key_queue = Vec::with_capacity(1);
         for (i, arg) in args.enumerate() {
             if i != index {
-                /*
                 if key_queue.is_empty() {
-                    self.panic(format!("value: {}, cannot be bound to any parameter", arg));
-                }
-                */
-                if key_queue.is_empty() {
+                    self.warning(format!("value: {}, cannot be bound to any parameter", arg));
                     continue;
                 }
                 let key = key_queue.remove(0);
@@ -117,6 +84,12 @@ impl Flag {
         std::process::exit(0);
     }
 
+    fn warning<T: std::fmt::Display>(&self, msg: T) {
+        if self.is_warning {
+            println!("[Warning] {}", msg);
+        }
+    }
+
     fn print_help(&self) {
         println!("help:");
         for (key, value) in self.keys.iter() {
@@ -132,10 +105,23 @@ impl Flag {
         }
     }
 
+    pub fn set_help(&mut self, help: String) {
+        *&mut self.help = help;
+    }
+
+    pub fn set_warning(&mut self) {
+        self.is_warning = true;
+    }
+
+    pub fn set_nowarning(&mut self) {
+        self.is_warning = false;
+    }
+
     pub fn new() -> Self {
         Self {
             help: "--help".to_string(),
-            keys: HashMap::new()
+            keys: HashMap::new(),
+            is_warning: true
         }
     }
 }
