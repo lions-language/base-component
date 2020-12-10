@@ -48,7 +48,7 @@ impl Flag {
         v.is
     }
 
-    pub fn parse(&mut self) {
+    pub fn parse2(&mut self) {
         let args = env::args();
         let args_len = args.len();
         let mut is_find = false;
@@ -78,7 +78,41 @@ impl Flag {
         }
     }
 
-    fn panic(&self, msg: String) {
+    pub fn parse(&mut self) {
+        let args = env::args();
+        let mut index = 0;
+        let mut key_queue = Vec::with_capacity(1);
+        for (i, arg) in args.enumerate() {
+            if i != index {
+                /*
+                if key_queue.is_empty() {
+                    self.panic(format!("value: {}, cannot be bound to any parameter", arg));
+                }
+                */
+                if key_queue.is_empty() {
+                    continue;
+                }
+                let key = key_queue.remove(0);
+                *self.keys.get_mut(&key).unwrap().value.borrow_mut() = arg;
+                continue;
+            }
+            if arg == self.help {
+                self.print_help();
+                self.exit();
+            }
+            match self.keys.get(&arg) {
+                Some(item) => {
+                    index += 1 + 1;
+                    key_queue.push(arg);
+                    continue;
+                },
+                None => {
+                }
+            }
+        }
+    }
+
+    fn panic<T: std::fmt::Display>(&self, msg: T) {
         println!("{}", msg);
         std::process::exit(0);
     }
