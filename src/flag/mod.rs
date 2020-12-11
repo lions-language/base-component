@@ -27,6 +27,28 @@ impl Value {
     }
 }
 
+enum ReadStatus {
+    Processing,
+    Finish
+}
+
+struct Reader {
+    value: Rc<RefCell<String>>
+}
+
+impl Reader {
+    fn process(&mut self, arg: String) -> ReadStatus {
+        *self.value.borrow_mut() = arg;
+        ReadStatus::Finish
+    }
+
+    fn new(value: Rc<RefCell<String>>) -> Self {
+        Self {
+            value: value
+        }
+    }
+}
+
 impl Flag {
     pub fn register(&mut self, key: String, default: String) -> Value {
         self.register_with_desc(key, default, String::from(""))
@@ -72,43 +94,35 @@ impl Flag {
     }
 
     pub fn parse(&mut self) {
-        enum Status {
-            Fix,
-            Lengthen
-        }
         let args = env::args();
-        let mut index = 0;
-        let mut key_queue = Vec::with_capacity(1);
-        let mut status = Status::Fix;
+        let mut reader: Option<Reader> = None;
+        let mut read_status = ReadStatus::Processing;
         for (i, arg) in args.enumerate() {
-            match status {
-                Status::Fix => {
-                    if i != index {
-                        self.value_update(&mut key_queue, arg);
-                        continue;
-                    }
-                },
-                Status::Lengthen => {
-                    if self.keys.get(&arg).is_none() {
-                        self.value_update(&mut key_queue, arg);
-                        continue;
-                    }
-                }
-            }
             if arg == self.help {
                 self.print_help();
                 self.exit();
             }
-            match self.keys.get(&arg) {
-                Some(item) => {
-                    index += 1 + 1;
-                    if !key_queue.is_empty() {
-                        key_queue.clear();
+            match &mut reader {
+                Some(r) => {
+                    read_status = r.process(arg);
+                    if let ReadStatus::Finish = &read_status {
+                        reader = None;
                     }
-                    key_queue.push(arg);
-                    continue;
                 },
                 None => {
+                    match self.keys.get(&arg) {
+                        Some(item) => {
+                            if let ReadStatus::Processing = &read_status {
+                                self.panic(format!(
+                                        "the parameters before the {} parameter are not matched"
+                                        , arg));
+                            }
+                            reader = Some(Reader::new(item.value.clone()));
+                            continue;
+                        },
+                        None => {
+                        }
+                    }
                 }
             }
         }
