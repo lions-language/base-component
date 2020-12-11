@@ -3,8 +3,10 @@ use std::rc::Rc;
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 
+type RcValue = Rc<RefCell<String>>;
+
 struct Item {
-    value: Rc<RefCell<String>>,
+    value: RcValue,
     desc: String,
     is: bool,
 }
@@ -16,11 +18,11 @@ pub struct Flag {
 }
 
 pub struct Value {
-    v: Rc<RefCell<String>>
+    v: RcValue
 }
 
 impl Value {
-    fn new(v: Rc<RefCell<String>>) -> Self {
+    fn new(v: RcValue) -> Self {
         Self {
             v: v
         }
@@ -33,7 +35,7 @@ enum ReadStatus {
 }
 
 struct Reader {
-    value: Rc<RefCell<String>>
+    value: RcValue
 }
 
 impl Reader {
@@ -42,7 +44,7 @@ impl Reader {
         ReadStatus::Finish
     }
 
-    fn new(value: Rc<RefCell<String>>) -> Self {
+    fn new(value: RcValue) -> Self {
         Self {
             value: value
         }
@@ -83,8 +85,7 @@ impl Flag {
         v.is
     }
 
-    fn value_update(&mut self, key_queue: &mut Vec<String>
-        , arg: String) {
+    fn value_update(&mut self, key_queue: &mut Vec<String>, arg: String) {
         if key_queue.is_empty() {
             self.warning(format!("value: {}, cannot be bound to any parameter", arg));
             return;
