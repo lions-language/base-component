@@ -61,19 +61,39 @@ impl Flag {
         v.is
     }
 
+    fn value_update(&mut self, key_queue: &mut Vec<String>
+        , arg: String) {
+        if key_queue.is_empty() {
+            self.warning(format!("value: {}, cannot be bound to any parameter", arg));
+            return;
+        }
+        let key = key_queue.remove(0);
+        *self.keys.get_mut(&key).unwrap().value.borrow_mut() = arg;
+    }
+
     pub fn parse(&mut self) {
+        enum Status {
+            Fix,
+            Lengthen
+        }
         let args = env::args();
         let mut index = 0;
         let mut key_queue = Vec::with_capacity(1);
+        let mut status = Status::Fix;
         for (i, arg) in args.enumerate() {
-            if i != index {
-                if key_queue.is_empty() {
-                    self.warning(format!("value: {}, cannot be bound to any parameter", arg));
-                    continue;
+            match status {
+                Status::Fix => {
+                    if i != index {
+                        self.value_update(&mut key_queue, arg);
+                        continue;
+                    }
+                },
+                Status::Lengthen => {
+                    if self.keys.get(&arg).is_none() {
+                        self.value_update(&mut key_queue, arg);
+                        continue;
+                    }
                 }
-                let key = key_queue.remove(0);
-                *self.keys.get_mut(&key).unwrap().value.borrow_mut() = arg;
-                continue;
             }
             if arg == self.help {
                 self.print_help();
@@ -82,6 +102,9 @@ impl Flag {
             match self.keys.get(&arg) {
                 Some(item) => {
                     index += 1 + 1;
+                    if !key_queue.is_empty() {
+                        key_queue.clear();
+                    }
                     key_queue.push(arg);
                     continue;
                 },
