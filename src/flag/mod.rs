@@ -3,30 +3,6 @@ use std::rc::Rc;
 use std::cell::{RefCell};
 use std::collections::HashMap;
 use std::fmt;
-/*
-enum Opt {
-    Single(String),
-    Multi(Vec<String>)
-}
-
-impl fmt::Display for Opt {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Opt::Single(v) => {
-                v.fmt(f)
-            },
-            Opt::Multi(v) => {
-                let mut r = String::new();
-                for item in v {
-                    r.push_str(item);
-                    r.push(' ');
-                }
-                write!(f, "{}", r)
-            }
-        }
-    }
-}
-*/
 
 type RcValue = Rc<RefCell<String>>;
 
@@ -113,11 +89,11 @@ fn panic<T: std::fmt::Display>(msg: T) {
 }
 
 impl Flag {
-    pub fn register(&mut self, key: String, default: ItemValue) -> Value {
+    fn register(&mut self, key: String, default: ItemValue) -> Value {
         self.register_with_desc(key, default, String::from(""))
     }
 
-    pub fn register_with_desc(&mut self, key: String, default: ItemValue
+    fn register_with_desc(&mut self, key: String, default: ItemValue
         , desc: String) -> Value {
         let r = default;
         self.keys.insert(key.to_string(), Item{
@@ -260,14 +236,26 @@ macro_rules! read_u32 {
 #[macro_export]
 macro_rules! read_string {
     ($v:ident) => {
-        match $v.v {
+        &*match $v.v {
             ItemValue::Single(v) => v,
-            ItemValue::Multi(v) => {
+            ItemValue::Multi(_) => {
                 println!("[ERROR] value is single");
                 std::process::exit(0);
             }
-        }
-        &*$v.v.borrow()
+        }.borrow()
+    }
+}
+
+#[macro_export]
+macro_rules! read_vector {
+    ($v:ident) => {
+        &*match $v.v {
+            ItemValue::Multi(v) => v,
+            ItemValue::Single(_) => {
+                println!("[ERROR] value is single");
+                std::process::exit(0);
+            }
+        }.borrow()
     }
 }
 
