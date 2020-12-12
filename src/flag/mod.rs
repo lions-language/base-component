@@ -1,9 +1,33 @@
 use std::env;
 use std::rc::Rc;
-use std::cell::{Ref, RefCell};
+use std::cell::{RefCell};
 use std::collections::HashMap;
+use std::fmt;
 
-type RcValue = Rc<RefCell<String>>;
+enum Opt {
+    Single(String),
+    Multi(Vec<String>)
+}
+
+impl fmt::Display for Opt {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Opt::Single(v) => {
+                v.fmt(f)
+            },
+            Opt::Multi(v) => {
+                let mut r = String::new();
+                for item in v {
+                    r.push_str(item);
+                    r.push(' ');
+                }
+                write!(f, "{}", r)
+            }
+        }
+    }
+}
+
+type RcValue = Rc<RefCell<Opt>>;
 
 struct Item {
     value: RcValue,
@@ -40,7 +64,7 @@ struct Reader {
 
 impl Reader {
     fn process(&mut self, arg: String) -> ReadStatus {
-        *self.value.borrow_mut() = arg;
+        *self.value.borrow_mut() = Opt::Single(arg);
         ReadStatus::Finish
     }
 
@@ -52,11 +76,11 @@ impl Reader {
 }
 
 impl Flag {
-    pub fn register(&mut self, key: String, default: String) -> Value {
+    pub fn register(&mut self, key: String, default: Opt) -> Value {
         self.register_with_desc(key, default, String::from(""))
     }
 
-    pub fn register_with_desc(&mut self, key: String, default: String
+    pub fn register_with_desc(&mut self, key: String, default: Opt
         , desc: String) -> Value {
         let r = Rc::new(RefCell::new(default));
         self.keys.insert(key.to_string(), Item{
@@ -68,11 +92,11 @@ impl Flag {
     }
 
     pub fn reg_string(&mut self, key: String, default: String, desc: String) -> Value {
-        self.register_with_desc(key, default, desc)
+        self.register_with_desc(key, Opt::Single(default), desc)
     }
 
     pub fn reg_u32(&mut self, key: String, default: u32, desc: String) -> Value {
-        self.register_with_desc(key, default.to_string(), desc)
+        self.register_with_desc(key, Opt::Single(default.to_string()), desc)
     }
 
     pub fn has(&self, key: &str) -> bool {
@@ -83,15 +107,6 @@ impl Flag {
             }
         };
         v.is
-    }
-
-    fn value_update(&mut self, key_queue: &mut Vec<String>, arg: String) {
-        if key_queue.is_empty() {
-            self.warning(format!("value: {}, cannot be bound to any parameter", arg));
-            return;
-        }
-        let key = key_queue.remove(0);
-        *self.keys.get_mut(&key).unwrap().value.borrow_mut() = arg;
     }
 
     pub fn parse(&mut self) {
