@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::cell::{RefCell};
 use std::collections::HashMap;
 use std::fmt;
-
+/*
 enum Opt {
     Single(String),
     Multi(Vec<String>)
@@ -26,11 +26,36 @@ impl fmt::Display for Opt {
         }
     }
 }
+*/
 
-type RcValue = Rc<RefCell<Opt>>;
+type RcValue = Rc<RefCell<String>>;
+
+#[derive(Clone)]
+enum ItemValue {
+    Single(RcValue),
+    Multi(Vec<RcValue>)
+}
+
+impl fmt::Display for ItemValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ItemValue::Single(v) => {
+                v.borrow().fmt(f)
+            },
+            ItemValue::Multi(v) => {
+                let mut r = String::new();
+                for item in v {
+                    r.push_str(&*item.borrow());
+                    r.push(' ');
+                }
+                write!(f, "{}", r)
+            }
+        }
+    }
+}
 
 struct Item {
-    value: RcValue,
+    value: ItemValue,
     desc: String,
     is: bool,
 }
@@ -42,11 +67,11 @@ pub struct Flag {
 }
 
 pub struct Value {
-    v: RcValue
+    v: ItemValue
 }
 
 impl Value {
-    fn new(v: RcValue) -> Self {
+    fn new(v: ItemValue) -> Self {
         Self {
             v: v
         }
@@ -59,30 +84,42 @@ enum ReadStatus {
 }
 
 struct Reader {
-    value: RcValue
+    value: ItemValue
 }
 
 impl Reader {
     fn process(&mut self, arg: String) -> ReadStatus {
-        *self.value.borrow_mut() = Opt::Single(arg);
+        match &mut self.value {
+            ItemValue::Single(v) => {
+                *v.borrow_mut() = arg;
+            },
+            ItemValue::Multi(v) => {
+                v.push(Rc::new(RefCell::new(arg)));
+            }
+        }
         ReadStatus::Finish
     }
 
-    fn new(value: RcValue) -> Self {
+    fn new(value: ItemValue) -> Self {
         Self {
             value: value
         }
     }
 }
 
+fn panic<T: std::fmt::Display>(msg: T) {
+    println!("{}", msg);
+    std::process::exit(0);
+}
+
 impl Flag {
-    pub fn register(&mut self, key: String, default: Opt) -> Value {
+    pub fn register(&mut self, key: String, default: ItemValue) -> Value {
         self.register_with_desc(key, default, String::from(""))
     }
 
-    pub fn register_with_desc(&mut self, key: String, default: Opt
+    pub fn register_with_desc(&mut self, key: String, default: ItemValue
         , desc: String) -> Value {
-        let r = Rc::new(RefCell::new(default));
+        let r = default;
         self.keys.insert(key.to_string(), Item{
             value: r.clone(),
             desc: desc,
@@ -92,11 +129,13 @@ impl Flag {
     }
 
     pub fn reg_string(&mut self, key: String, default: String, desc: String) -> Value {
-        self.register_with_desc(key, Opt::Single(default), desc)
+        self.register_with_desc(key
+            , ItemValue::Single(RcValue::new(RefCell::new(default))), desc)
     }
 
     pub fn reg_u32(&mut self, key: String, default: u32, desc: String) -> Value {
-        self.register_with_desc(key, Opt::Single(default.to_string()), desc)
+        self.register_with_desc(key
+            , ItemValue::Single(RcValue::new(RefCell::new(default.to_string()))), desc)
     }
 
     pub fn has(&self, key: &str) -> bool {
@@ -129,7 +168,7 @@ impl Flag {
                     match self.keys.get(&arg) {
                         Some(item) => {
                             if let ReadStatus::Processing = &read_status {
-                                self.panic(format!(
+                                panic(format!(
                                         "the parameters before the {} parameter are not matched"
                                         , arg));
                             }
@@ -144,11 +183,6 @@ impl Flag {
         }
     }
 
-    fn panic<T: std::fmt::Display>(&self, msg: T) {
-        println!("{}", msg);
-        std::process::exit(0);
-    }
-
     fn warning<T: std::fmt::Display>(&self, msg: T) {
         if self.is_warning {
             println!("[Warning] {}", msg);
@@ -158,16 +192,12 @@ impl Flag {
     fn print_help(&self) {
         println!("help:");
         for (key, value) in self.keys.iter() {
-            println!("\t{}\n\t\tdefault: {}\n\t\tdesc: {}", key, *value.value.borrow(), &value.desc);
+            println!("\t{}\n\t\tdefault: {}\n\t\tdesc: {}", key, value.value, &value.desc);
         }
     }
 
     fn exit(&self) {
-        if cfg!(target_os="windows") {
-            std::process::exit(0);
-        } else {
-            std::process::exit(0);
-        }
+        std::process::exit(0);
     }
 
     pub fn set_help(&mut self, help: String) {
@@ -194,11 +224,19 @@ impl Flag {
 #[macro_export]
 macro_rules! read {
     ($v:ident, $typ:ident) => {
-        match $v.v.borrow().parse::<$typ>() {
-            Ok(v) => v,
-            Err(_) => {
-                println!("[ERROR] file: {}, line: {}, var \"{}\": to {} error"
-                    , file!(), line!(), stringify!($v), stringify!($typ));
+        match $v.v {
+            ItemValue::Single(v) => {
+                match v.borrow().parse::<$typ>() {
+                    Ok(v) => v,
+                    Err(_) => {
+                        println!("[ERROR] file: {}, line: {}, var \"{}\": to {} error"
+                            , file!(), line!(), stringify!($v), stringify!($typ));
+                        std::process::exit(0);
+                    }
+                }
+            },
+            ItemValue::Multi(_) => {
+                println!("[ERROR] value is single");
                 std::process::exit(0);
             }
         }
@@ -222,6 +260,13 @@ macro_rules! read_u32 {
 #[macro_export]
 macro_rules! read_string {
     ($v:ident) => {
+        match $v.v {
+            ItemValue::Single(v) => v,
+            ItemValue::Multi(v) => {
+                println!("[ERROR] value is single");
+                std::process::exit(0);
+            }
+        }
         &*$v.v.borrow()
     }
 }
