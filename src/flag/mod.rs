@@ -4,10 +4,10 @@ use std::cell::{RefCell};
 use std::collections::HashMap;
 use std::fmt;
 
-type RcValue = Rc<RefCell<String>>;
+pub type RcValue = Rc<RefCell<String>>;
 
 #[derive(Clone)]
-enum ItemValue {
+pub enum ItemValue {
     Single(RcValue),
     Multi(Vec<RcValue>)
 }
@@ -83,19 +83,45 @@ impl Reader {
     }
 }
 
+pub trait ToItem {
+    fn to_item(self) -> ItemValue;
+}
+
+impl ToItem for Vec<String> {
+    fn to_item(self) -> ItemValue {
+        let mut v = Vec::with_capacity(self.len());
+        while self.len() > 0 {
+            v.push(RcValue::new(RefCell::new(self.pop().unwrap())));
+        }
+        ItemValue::Multi(v)
+    }
+}
+
+impl ToItem for String {
+    fn to_item(self) -> ItemValue {
+        ItemValue::Single(RcValue::new(RefCell::new(self)))
+    }
+}
+
+impl ToItem for u32 {
+    fn to_item(self) -> ItemValue {
+        ItemValue::Single(RcValue::new(RefCell::new(self.to_string())))
+    }
+}
+
 fn panic<T: std::fmt::Display>(msg: T) {
     println!("{}", msg);
     std::process::exit(0);
 }
 
 impl Flag {
-    fn register(&mut self, key: String, default: ItemValue) -> Value {
+    fn register<T: ToItem>(&mut self, key: String, default: T) -> Value {
         self.register_with_desc(key, default, String::from(""))
     }
 
-    fn register_with_desc(&mut self, key: String, default: ItemValue
+    fn register_with_desc<T: ToItem>(&mut self, key: String, default: T
         , desc: String) -> Value {
-        let r = default;
+        let r = default.to_item();
         self.keys.insert(key.to_string(), Item{
             value: r.clone(),
             desc: desc,
@@ -106,12 +132,18 @@ impl Flag {
 
     pub fn reg_string(&mut self, key: String, default: String, desc: String) -> Value {
         self.register_with_desc(key
-            , ItemValue::Single(RcValue::new(RefCell::new(default))), desc)
+            , default, desc)
     }
 
     pub fn reg_u32(&mut self, key: String, default: u32, desc: String) -> Value {
         self.register_with_desc(key
-            , ItemValue::Single(RcValue::new(RefCell::new(default.to_string()))), desc)
+            , default, desc)
+    }
+
+    pub fn reg_fix_str_vec(&mut self, key: String, default: Vec<String>
+        , desc: String) -> Value {
+        self.register_with_desc(key
+            , default, desc)
     }
 
     pub fn has(&self, key: &str) -> bool {
