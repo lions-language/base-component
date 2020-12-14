@@ -1,7 +1,7 @@
 use std::env;
 use std::rc::Rc;
 use std::cell::{RefCell};
-use std::collections::HashMap;
+use std::collections::{VecDeque, HashMap};
 use std::fmt;
 
 pub type RcValue = Rc<RefCell<String>>;
@@ -9,7 +9,7 @@ pub type RcValue = Rc<RefCell<String>>;
 #[derive(Clone)]
 pub enum ItemValue {
     Single(RcValue),
-    Multi(Vec<RcValue>)
+    Multi(VecDeque<RcValue>)
 }
 
 impl fmt::Display for ItemValue {
@@ -34,6 +34,7 @@ struct Item {
     value: ItemValue,
     desc: String,
     is: bool,
+    value_len: isize
 }
 
 pub struct Flag {
@@ -43,7 +44,7 @@ pub struct Flag {
 }
 
 pub struct Value {
-    v: ItemValue
+    pub v: ItemValue
 }
 
 impl Value {
@@ -60,7 +61,9 @@ enum ReadStatus {
 }
 
 struct Reader {
-    value: ItemValue
+    value: ItemValue,
+    value_len: isize,
+    index: usize
 }
 
 impl Reader {
@@ -70,15 +73,42 @@ impl Reader {
                 *v.borrow_mut() = arg;
             },
             ItemValue::Multi(v) => {
-                v.push(Rc::new(RefCell::new(arg)));
+                if self.index < v.len() {
+                    *v[self.index].borrow_mut() = arg;
+                } else {
+                    v.push_back(Rc::new(RefCell::new(arg)));
+                }
             }
         }
-        ReadStatus::Finish
+        self.index += 1;
+        if self.value_len < 0 {
+            ReadStatus::Processing
+        } else {
+            if self.index == self.value_len as usize {
+                ReadStatus::Finish
+            } else {
+                ReadStatus::Processing
+            }
+        }
     }
 
-    fn new(value: ItemValue) -> Self {
+    fn next_key(&self) -> ReadStatus {
+        if self.value_len < 0 {
+            ReadStatus::Finish
+        } else {
+            if self.index != self.value_len as usize {
+                ReadStatus::Processing
+            } else {
+                ReadStatus::Finish
+            }
+        }
+    }
+
+    fn new(value: ItemValue, value_len: isize) -> Self {
         Self {
-            value: value
+            value: value,
+            value_len: value_len,
+            index: 0
         }
     }
 }
@@ -87,11 +117,11 @@ pub trait ToItem {
     fn to_item(self) -> ItemValue;
 }
 
-impl ToItem for Vec<String> {
-    fn to_item(self) -> ItemValue {
-        let mut v = Vec::with_capacity(self.len());
+impl ToItem for VecDeque<String> {
+    fn to_item(mut self) -> ItemValue {
+        let mut v = VecDeque::with_capacity(self.len());
         while self.len() > 0 {
-            v.push(RcValue::new(RefCell::new(self.pop().unwrap())));
+            v.push_back(RcValue::new(RefCell::new(self.pop_front().unwrap())));
         }
         ItemValue::Multi(v)
     }
@@ -115,35 +145,44 @@ fn panic<T: std::fmt::Display>(msg: T) {
 }
 
 impl Flag {
-    fn register<T: ToItem>(&mut self, key: String, default: T) -> Value {
-        self.register_with_desc(key, default, String::from(""))
+    fn register<T: ToItem>(&mut self, key: String, default: T
+        , value_len: isize) -> Value {
+        self.register_with_desc(key, default, String::from(""), value_len)
     }
 
     fn register_with_desc<T: ToItem>(&mut self, key: String, default: T
-        , desc: String) -> Value {
+        , desc: String, value_len: isize) -> Value {
         let r = default.to_item();
         self.keys.insert(key.to_string(), Item{
             value: r.clone(),
             desc: desc,
-            is: false
+            is: false,
+            value_len: value_len
         });
         Value::new(r)
     }
 
     pub fn reg_string(&mut self, key: String, default: String, desc: String) -> Value {
         self.register_with_desc(key
-            , default, desc)
+            , default, desc, 1)
     }
 
     pub fn reg_u32(&mut self, key: String, default: u32, desc: String) -> Value {
         self.register_with_desc(key
-            , default, desc)
+            , default, desc, 1)
     }
 
-    pub fn reg_fix_str_vec(&mut self, key: String, default: Vec<String>
+    pub fn reg_fixed_str_vec(&mut self, key: String, default: VecDeque<String>
+        , desc: String) -> Value {
+        let len = default.len();
+        self.register_with_desc(key
+            , default, desc, len as isize)
+    }
+
+    pub fn reg_lengthen_str_vec(&mut self, key: String, default: VecDeque<String>
         , desc: String) -> Value {
         self.register_with_desc(key
-            , default, desc)
+            , default, desc, -1)
     }
 
     pub fn has(&self, key: &str) -> bool {
@@ -159,11 +198,28 @@ impl Flag {
     pub fn parse(&mut self) {
         let args = env::args();
         let mut reader: Option<Reader> = None;
-        let mut read_status = ReadStatus::Processing;
+        let mut read_status = ReadStatus::Finish;
         for (i, arg) in args.enumerate() {
             if arg == self.help {
                 self.print_help();
                 self.exit();
+            }
+            match self.keys.get(&arg) {
+                Some(item) => {
+                    if let Some(r) = &reader {
+                        read_status = r.next_key();
+                    };
+                    if let ReadStatus::Processing = &read_status {
+                        panic(format!(
+                                "the parameters before the {} parameter are not matched"
+                                , arg));
+                    }
+                    reader = Some(Reader::new(item.value.clone()
+                            , item.value_len));
+                    continue;
+                },
+                None => {
+                }
             }
             match &mut reader {
                 Some(r) => {
@@ -173,19 +229,6 @@ impl Flag {
                     }
                 },
                 None => {
-                    match self.keys.get(&arg) {
-                        Some(item) => {
-                            if let ReadStatus::Processing = &read_status {
-                                panic(format!(
-                                        "the parameters before the {} parameter are not matched"
-                                        , arg));
-                            }
-                            reader = Some(Reader::new(item.value.clone()));
-                            continue;
-                        },
-                        None => {
-                        }
-                    }
                 }
             }
         }
@@ -267,7 +310,7 @@ macro_rules! read_u32 {
 
 #[macro_export]
 macro_rules! read_string {
-    ($v:ident) => {
+    ($v:expr) => {
         &*match $v.v {
             ItemValue::Single(v) => v,
             ItemValue::Multi(_) => {
@@ -279,16 +322,48 @@ macro_rules! read_string {
 }
 
 #[macro_export]
+macro_rules! read_string_item {
+    ($v:expr) => {
+        $v.borrow()
+    }
+}
+
+#[macro_export]
+macro_rules! read_item {
+    ($v:ident, $typ:ident) => {
+        match $v.borrow().parse::<$typ>() {
+            Ok(v) => v,
+            Err(_) => {
+                println!("[ERROR] file: {}, line: {}, var \"{}\": to {} error"
+                    , file!(), line!(), stringify!($v), stringify!($typ));
+                std::process::exit(0);
+            }
+        }
+    }
+}
+
+#[macro_export]
 macro_rules! read_vector {
     ($v:ident) => {
-        &*match $v.v {
+        &match $v.v {
             ItemValue::Multi(v) => v,
             ItemValue::Single(_) => {
                 println!("[ERROR] value is single");
                 std::process::exit(0);
             }
-        }.borrow()
+        }
     }
+}
+
+#[macro_export]
+macro_rules! vecdeque {
+    ($($value:expr),*) => (
+        {
+            let mut v = std::collections::VecDeque::new();
+            $(v.push_back($value);)*
+            v
+        }
+    )
 }
 
 #[cfg(test)]
@@ -302,9 +377,21 @@ mod test {
             , String::from("host"));
         let port = flag.reg_u32(String::from("-p"), 80
             , String::from("port"));
+        let address = flag.reg_lengthen_str_vec(String::from("-address")
+            , vecdeque!["a".to_string(), "b".to_string(), "c".to_string()]
+            , String::from("address"));
+        let packages = flag.reg_fixed_str_vec(String::from("-packages")
+            , vecdeque!["libmath".to_string(), "../third".to_string()]
+            , String::from("packages"));
         flag.parse();
         println!("{}", read_string!(host));
         println!("{}", read_i32!(port));
+        for item in read_vector!(address) {
+            println!("{}", read_string_item!(item));
+        }
+        for item in read_vector!(packages) {
+            println!("{}", read_string_item!(item));
+        }
     }
 }
 
