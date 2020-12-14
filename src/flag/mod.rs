@@ -5,11 +5,12 @@ use std::collections::{VecDeque, HashMap};
 use std::fmt;
 
 pub type RcValue = Rc<RefCell<String>>;
+pub type VecRcValue = Rc<RefCell<VecDeque<RcValue>>>;
 
 #[derive(Clone)]
 pub enum ItemValue {
     Single(RcValue),
-    Multi(VecDeque<RcValue>)
+    Multi(VecRcValue)
 }
 
 impl fmt::Display for ItemValue {
@@ -20,7 +21,7 @@ impl fmt::Display for ItemValue {
             },
             ItemValue::Multi(v) => {
                 let mut r = String::new();
-                for item in v {
+                for item in &*v.borrow() {
                     r.push_str(&*item.borrow());
                     r.push(' ');
                 }
@@ -73,10 +74,10 @@ impl Reader {
                 *v.borrow_mut() = arg;
             },
             ItemValue::Multi(v) => {
-                if self.index < v.len() {
-                    *v[self.index].borrow_mut() = arg;
+                if self.index < v.borrow().len() {
+                    *v.borrow_mut()[self.index].borrow_mut() = arg;
                 } else {
-                    v.push_back(Rc::new(RefCell::new(arg)));
+                    v.borrow_mut().push_back(Rc::new(RefCell::new(arg)));
                 }
             }
         }
@@ -123,7 +124,7 @@ impl ToItem for VecDeque<String> {
         while self.len() > 0 {
             v.push_back(RcValue::new(RefCell::new(self.pop_front().unwrap())));
         }
-        ItemValue::Multi(v)
+        ItemValue::Multi(VecRcValue::new(RefCell::new(v)))
     }
 }
 
@@ -199,7 +200,7 @@ impl Flag {
         let args = env::args();
         let mut reader: Option<Reader> = None;
         let mut read_status = ReadStatus::Finish;
-        for (i, arg) in args.enumerate() {
+        for (_, arg) in args.enumerate() {
             if arg == self.help {
                 self.print_help();
                 self.exit();
@@ -345,13 +346,13 @@ macro_rules! read_item {
 #[macro_export]
 macro_rules! read_vector {
     ($v:ident) => {
-        &match $v.v {
+        &*match $v.v {
             ItemValue::Multi(v) => v,
             ItemValue::Single(_) => {
                 println!("[ERROR] value is single");
                 std::process::exit(0);
             }
-        }
+        }.borrow()
     }
 }
 
