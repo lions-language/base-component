@@ -145,6 +145,54 @@ fn panic<T: std::fmt::Display>(msg: T) {
     std::process::exit(0);
 }
 
+struct ReaderMap {
+    mapping: HashMap<String, usize>,
+    readers: Vec<Reader>,
+    used: isize
+}
+
+impl ReaderMap {
+    fn insert(&mut self, key: String, reader: Reader) {
+        self.readers.push(reader);
+        self.mapping.insert(key, self.readers.len() - 1);
+        self.used = self.readers.len() as isize - 1;
+    }
+
+    fn update_use(&mut self, key: &str) {
+        self.used = *self.mapping.get(key).unwrap() as isize;
+    }
+
+    fn finish_use(&mut self) {
+        self.used = -1;
+    }
+
+    fn used_mut(&mut self) -> Option<&mut Reader> {
+        if self.used < 0 {
+            return None;
+        }
+        Some(&mut self.readers[self.used as usize])
+    }
+
+    fn used_ref(&self) -> Option<&Reader> {
+        if self.used < 0 {
+            return None;
+        }
+        Some(&self.readers[self.used as usize])
+    }
+
+    fn exists(&self, key: &str) -> bool {
+        self.mapping.contains_key(key)
+    }
+
+    fn new() -> Self {
+        Self {
+            mapping: HashMap::new(),
+            readers: Vec::new(),
+            used: -1
+        }
+    }
+}
+
 impl Flag {
     fn register<T: ToItem>(&mut self, key: String, default: T
         , value_len: isize) -> Value {
@@ -198,7 +246,7 @@ impl Flag {
 
     pub fn parse(&mut self) {
         let args = env::args();
-        let mut reader: Option<Reader> = None;
+        let mut reader: ReaderMap = ReaderMap::new();
         let mut read_status = ReadStatus::Finish;
         for (_, arg) in args.enumerate() {
             if arg == self.help {
@@ -207,7 +255,7 @@ impl Flag {
             }
             match self.keys.get(&arg) {
                 Some(item) => {
-                    if let Some(r) = &reader {
+                    if let Some(r) = reader.used_ref() {
                         read_status = r.next_key();
                     };
                     if let ReadStatus::Processing = &read_status {
@@ -215,18 +263,22 @@ impl Flag {
                                 "the parameters before the {} parameter are not matched"
                                 , arg));
                     }
-                    reader = Some(Reader::new(item.value.clone()
-                            , item.value_len));
+                    if reader.exists(&arg) {
+                        reader.update_use(&arg);
+                    } else {
+                        reader.insert(arg, Reader::new(item.value.clone()
+                                , item.value_len));
+                    }
                     continue;
                 },
                 None => {
                 }
             }
-            match &mut reader {
+            match reader.used_mut() {
                 Some(r) => {
                     read_status = r.process(arg);
                     if let ReadStatus::Finish = &read_status {
-                        reader = None;
+                        reader.finish_use();
                     }
                 },
                 None => {
