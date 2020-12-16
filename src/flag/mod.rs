@@ -328,7 +328,7 @@ impl Flag {
 #[macro_export]
 macro_rules! read {
     ($v:ident, $typ:ident) => {
-        match $v.v {
+        match &$v.v {
             ItemValue::Single(v) => {
                 match v.borrow().parse::<$typ>() {
                     Ok(v) => v,
@@ -364,7 +364,7 @@ macro_rules! read_u32 {
 #[macro_export]
 macro_rules! read_string {
     ($v:expr) => {
-        &*match $v.v {
+        &*match &$v.v {
             ItemValue::Single(v) => v,
             ItemValue::Multi(_) => {
                 println!("[ERROR] value is single");
@@ -398,7 +398,7 @@ macro_rules! read_item {
 #[macro_export]
 macro_rules! read_vector {
     ($v:ident) => {
-        &*match $v.v {
+        &*match &$v.v {
             ItemValue::Multi(v) => v,
             ItemValue::Single(_) => {
                 println!("[ERROR] value is single");
@@ -437,7 +437,10 @@ mod test {
             , vecdeque!["libmath".to_string(), "../third".to_string()]
             , String::from("packages"));
         flag.parse();
-        println!("{}", read_string!(host));
+        let h = read_string!(host);
+        println!("{}", h);
+        let p = read_i32!(port);
+        println!("{}", p);
         println!("{}", read_i32!(port));
         for item in read_vector!(address) {
             println!("{}", read_string_item!(item));
