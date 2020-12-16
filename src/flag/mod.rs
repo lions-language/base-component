@@ -377,7 +377,7 @@ macro_rules! read_string {
 #[macro_export]
 macro_rules! read_string_item {
     ($v:expr) => {
-        $v.borrow()
+        &*$v.borrow()
     }
 }
 
