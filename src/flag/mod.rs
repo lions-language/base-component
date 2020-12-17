@@ -58,7 +58,8 @@ impl Value {
 
 enum ReadStatus {
     Processing,
-    Finish
+    Finish,
+    Error(String)
 }
 
 struct Reader {
@@ -87,6 +88,8 @@ impl Reader {
         } else {
             if self.index == self.value_len as usize {
                 ReadStatus::Finish
+            } else if self.index > self.value_len as usize {
+                ReadStatus::Error(format!("fixed param, but specity lengthen"))
             } else {
                 ReadStatus::Processing
             }
@@ -134,11 +137,17 @@ impl ToItem for String {
     }
 }
 
-impl ToItem for u32 {
-    fn to_item(self) -> ItemValue {
-        ItemValue::Single(RcValue::new(RefCell::new(self.to_string())))
+macro_rules! build_number_to_item {
+    ($t:ty) => {
+        impl ToItem for $t {
+            fn to_item(self) -> ItemValue {
+                ItemValue::Single(RcValue::new(RefCell::new(self.to_string())))
+            }
+        }
     }
 }
+
+build_number_to_item!{u32}
 
 fn panic<T: std::fmt::Display>(msg: T) {
     println!("{}", msg);
@@ -178,6 +187,18 @@ impl ReaderMap {
             return None;
         }
         Some(&self.readers[self.used as usize])
+    }
+
+    fn used_key_ref_unchecked(&self) -> &str {
+        if self.used < 0 {
+            panic!("should not happend");
+        }
+        for (k, v) in &self.mapping {
+            if self.used as usize == *v {
+                return k;
+            }
+        }
+        panic!("should not happend");
     }
 
     fn exists(&self, key: &str) -> bool {
@@ -277,8 +298,11 @@ impl Flag {
             match reader.used_mut() {
                 Some(r) => {
                     read_status = r.process(arg);
+                    if let ReadStatus::Error(err) = &read_status {
+                        panic(format!("[ERROR] param: {}: {}", reader.used_key_ref_unchecked(), err));
+                    }
                     if let ReadStatus::Finish = &read_status {
-                        reader.finish_use();
+                        // reader.finish_use();
                     }
                 },
                 None => {
