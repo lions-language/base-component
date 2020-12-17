@@ -147,7 +147,17 @@ macro_rules! build_number_to_item {
     }
 }
 
+build_number_to_item!{u8}
+build_number_to_item!{i8}
+build_number_to_item!{u16}
+build_number_to_item!{i16}
 build_number_to_item!{u32}
+build_number_to_item!{i32}
+build_number_to_item!{u64}
+build_number_to_item!{i64}
+build_number_to_item!{f32}
+build_number_to_item!{f64}
+build_number_to_item!{bool}
 
 fn panic<T: std::fmt::Display>(msg: T) {
     println!("{}", msg);
@@ -238,8 +248,7 @@ impl Flag {
     }
 
     pub fn reg_u32(&mut self, key: String, default: u32, desc: String) -> Value {
-        self.register_with_desc(key
-            , default, desc, 1)
+        self.register_with_desc(key, default, desc, 1)
     }
 
     pub fn reg_fixed_str_vec(&mut self, key: String, default: VecDeque<String>
