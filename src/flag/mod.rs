@@ -155,6 +155,8 @@ build_number_to_item!{u32}
 build_number_to_item!{i32}
 build_number_to_item!{u64}
 build_number_to_item!{i64}
+build_number_to_item!{usize}
+build_number_to_item!{isize}
 build_number_to_item!{f32}
 build_number_to_item!{f64}
 build_number_to_item!{bool}
@@ -224,6 +226,14 @@ impl ReaderMap {
     }
 }
 
+macro_rules! build_number_reg {
+    ($name:ident, $t:ty) => (
+        pub fn $name(&mut self, key: String, default: $t, desc: String) -> Value {
+            self.register_with_desc(key, default, desc, 1)
+        }
+    )
+}
+
 impl Flag {
     fn register<T: ToItem>(&mut self, key: String, default: T
         , value_len: isize) -> Value {
@@ -247,9 +257,19 @@ impl Flag {
             , default, desc, 1)
     }
 
-    pub fn reg_u32(&mut self, key: String, default: u32, desc: String) -> Value {
-        self.register_with_desc(key, default, desc, 1)
-    }
+    build_number_reg!(reg_i8, i8);
+    build_number_reg!(reg_u8, u8);
+    build_number_reg!(reg_i16, i16);
+    build_number_reg!(reg_u16, u16);
+    build_number_reg!(reg_i32, i32);
+    build_number_reg!(reg_u32, u32);
+    build_number_reg!(reg_i64, i64);
+    build_number_reg!(reg_u64, u64);
+    build_number_reg!(reg_isize, isize);
+    build_number_reg!(reg_usize, usize);
+    build_number_reg!(reg_f32, f32);
+    build_number_reg!(reg_f64, f64);
+    build_number_reg!(reg_bool, bool);
 
     pub fn reg_fixed_str_vec(&mut self, key: String, default: VecDeque<String>
         , desc: String) -> Value {
