@@ -1,101 +1,48 @@
 use std::env;
+use std::any::Any;
 use std::rc::Rc;
 use std::cell::{RefCell};
 use std::collections::{VecDeque, HashMap};
 use std::fmt;
 
-pub type Value = Rc<RefCell<Any>>;
+pub type Value = Rc<RefCell<Box<Any>>>;
 
-// impl fmt::Display for ItemValue {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         match self {
-//             v.borrow().fmt(f)
-//         }
-//     }
-// }
+pub enum ValueReaderStatus {
+    Pending,
+    Ready
+}
+
+pub trait ValueReader {
+    fn next(&self) -> ValueReaderStatus;
+    fn to_any(self) -> Box<Any>;
+}
 
 struct Item {
-    value: Value,
     desc: String,
-    is: bool,
-    value_len: isize
+    value: Value
 }
 
-pub struct Flag {
-    help: String,
-    keys: HashMap<String, Item>,
-    is_warning: bool
+pub struct Command {
+    keys: HashMap<String, Item>
 }
 
-pub struct Value {
-    pub v: ItemValue
-}
+impl Command {
+    pub fn register<T: ValueReader>(
+        &mut self, key: &str, default: T, desc: &str) -> Value {
 
-impl Value {
-    fn new(v: ItemValue) -> Self {
+        let value = Rc::new(RefCell::new(default.to_any()));
+
+        self.keys.insert(key.to_string(), Item{
+            desc: desc.to_string(),
+            value: value.clone()
+        });
+
+        value
+    }
+
+    pub fn new() -> Self {
         Self {
-            v: v
-        }
-    }
-}
-
-enum ReadStatus {
-    Processing,
-    Finish,
-    Error(String)
-}
-
-struct Reader {
-    value: ItemValue,
-    value_len: isize,
-    index: usize
-}
-
-impl Reader {
-    fn process(&mut self, arg: String) -> ReadStatus {
-        match &mut self.value {
-            ItemValue::Single(v) => {
-                *v.borrow_mut() = arg;
-            },
-            ItemValue::Multi(v) => {
-                if self.index < v.borrow().len() {
-                    *v.borrow_mut()[self.index].borrow_mut() = arg;
-                } else {
-                    v.borrow_mut().push_back(Rc::new(RefCell::new(arg)));
-                }
-            }
-        }
-        self.index += 1;
-        if self.value_len < 0 {
-            ReadStatus::Processing
-        } else {
-            if self.index == self.value_len as usize {
-                ReadStatus::Finish
-            } else if self.index > self.value_len as usize {
-                ReadStatus::Error(format!("fixed param, but specity lengthen"))
-            } else {
-                ReadStatus::Processing
-            }
-        }
-    }
-
-    fn next_key(&self) -> ReadStatus {
-        if self.value_len < 0 {
-            ReadStatus::Finish
-        } else {
-            if self.index != self.value_len as usize {
-                ReadStatus::Processing
-            } else {
-                ReadStatus::Finish
-            }
-        }
-    }
-
-    fn new(value: ItemValue, value_len: isize) -> Self {
-        Self {
-            value: value,
-            value_len: value_len,
-            index: 0
+            keys: HashMap::new()
         }
     }
 }
