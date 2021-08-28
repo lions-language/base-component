@@ -1,2 +1,2 @@
-pub mod flag;
-pub mod template;
+pub mod staticparse;
+pub mod dynamicparse;
