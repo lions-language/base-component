@@ -5,15 +5,24 @@ use std::cell::{RefCell};
 use std::collections::{VecDeque, HashMap};
 use std::fmt;
 
+pub use value_reader::*;
+
 pub type Value = Rc<RefCell<Box<Any>>>;
 
+pub struct StringValue {
+    value: Value
+}
+
+///////////////////////
 pub enum ValueReaderStatus {
     Pending,
     Ready
 }
 
 pub struct ValueReader {
-    pub next: fn(&str) -> ValueReaderStatus
+    pub create: fn() -> Box<Any>,
+    pub next: fn(&mut Box<Any>, &str) -> ValueReaderStatus,
+    pub result: fn(Box<Any>) -> Box<Any>
 }
 
 struct Item {
@@ -42,27 +51,45 @@ impl Command {
         value
     }
 
-    pub fn parse(&mut self) {
-        let args = env::args();
+    pub fn register<T: Any>(
+        &mut self, key: &str, default: T, desc: &str) {
+    }
 
-        for (_, arg) in args.enumerate() {
-            if arg == self.help_key {
+    pub fn parse(&mut self) {
+        let args: Vec<String> = env::args().collect();
+
+        let mut index = 0;
+        loop {
+            if index == args.len() - 1 {
+                break;
+            }
+
+            if &args[index] == &self.help_key {
                 self.print_help();
                 self.exit();
             }
 
-            let item = match self.keys.get(&arg) {
-                Some(item) => item,
+            let item = match self.keys.get(&args[index]) {
+                Some(item) => {
+                    index += 1;
+                    item
+                },
                 None => {
-                    continue;
+                    println!("{} unregister", &args[index]);
+                    self.exit();
+                    break;
                 }
             };
 
+            let mut object = (item.reader.create)();
             loop {
-                match (item.reader.next)(&arg) {
+                match (item.reader.next)(&mut object, &args[index]) {
                     ValueReaderStatus::Pending => {
+                        index += 1;
                     },
                     ValueReaderStatus::Ready => {
+                        index += 1;
+                        *item.value.borrow_mut() = (item.reader.result)(object);
                         break;
                     }
                 }
@@ -73,7 +100,7 @@ impl Command {
     fn print_help(&self) {
         println!("help:");
         for (key, value) in self.keys.iter() {
-            // println!("\t{}\n\t\tdefault: {}\n\t\tdesc: {}", key, value.value, &value.desc);
+            println!("\t{}\n\t\tdefault: {:?}\n\t\tdesc: {}", key, value.value, &value.desc);
         }
     }
 
@@ -92,4 +119,6 @@ impl Command {
         }
     }
 }
+
+pub mod value_reader;
 
