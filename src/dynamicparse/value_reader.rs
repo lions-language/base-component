@@ -23,3 +23,9 @@ impl StringValueReader {
     }
 }
 
+impl StringValue {
+    pub fn take_clone(&self) -> String {
+        let value = self.value.borrow();
+        value.downcast_ref::<String>().as_ref().unwrap().to_string()
+    }
+}

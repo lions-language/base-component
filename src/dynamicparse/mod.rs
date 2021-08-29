@@ -51,8 +51,17 @@ impl Command {
         value
     }
 
-    pub fn register<T: Any>(
-        &mut self, key: &str, default: T, desc: &str) {
+    pub fn register_string(
+        &mut self, key: &str, default: &str, desc: &str) -> StringValue {
+        let value = self.register_with_reader(key, Box::new(default.to_string()), desc, ValueReader{
+            create: StringValueReader::create,
+            next: StringValueReader::next,
+            result: StringValueReader::result
+        });
+
+        StringValue{
+            value: value
+        }
     }
 
     pub fn parse(&mut self) {
