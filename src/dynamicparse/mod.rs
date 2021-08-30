@@ -13,6 +13,10 @@ pub struct StringValue {
     value: Value
 }
 
+pub struct NumericalValue {
+    value: Value
+}
+
 ///////////////////////
 pub enum ValueReaderStatus {
     Pending,
