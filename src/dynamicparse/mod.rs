@@ -13,7 +13,7 @@ pub struct StringValue {
     value: Value
 }
 
-pub struct NumericalValue {
+pub struct U32Value {
     value: Value
 }
 

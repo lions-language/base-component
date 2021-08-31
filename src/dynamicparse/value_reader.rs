@@ -1,3 +1,5 @@
+use quote::quote;
+
 use super::*;
 
 pub struct StringValueReader {
@@ -30,25 +32,38 @@ impl StringValue {
     }
 }
 
+macro_rules! numerical_value_reader {
+    ($t:ty) => {{
+        quote! {
+            let struct_name = format!("{}ValueReader", stringify!($t));
+            pub struct #struct_name {
+                value: $t
+            }
+        }
+    }}
+}
+
+numerical_value_reader!{u32}
+
 /////////////////////////////////
-pub struct NumericalValueReader {
+pub struct U32ValueReader {
     value: u32
 }
 
-impl NumericalValueReader {
+impl U32ValueReader {
     pub fn next(obj: &mut Box<Any>, value: u32) -> ValueReaderStatus {
-        obj.downcast_mut::<NumericalValueReader>().unwrap().value = value;
+        obj.downcast_mut::<U32ValueReader>().unwrap().value = value;
         ValueReaderStatus::Ready
     }
 
     pub fn result(obj: Box<Any>) -> Box<Any> {
-        Box::new(obj.downcast_ref::<NumericalValueReader>().unwrap().value)
+        Box::new(obj.downcast_ref::<U32ValueReader>().unwrap().value)
     }
 }
 
-impl NumericalValueReader {
+impl U32ValueReader {
     pub fn create() -> Box<Any> {
-        let reader = NumericalValueReader {
+        let reader = U32ValueReader {
             value: 0 as u32
         };
 
@@ -56,7 +71,7 @@ impl NumericalValueReader {
     }
 }
 
-impl NumericalValue {
+impl U32Value {
     pub fn take_clone(&self) -> u32 {
         let value = self.value.borrow();
         **value.downcast_ref().as_ref().unwrap()
