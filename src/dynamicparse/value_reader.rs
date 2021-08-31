@@ -44,10 +44,12 @@ impl NumericalValueReader {
     pub fn result(obj: Box<Any>) -> Box<Any> {
         Box::new(obj.downcast_ref::<NumericalValueReader>().unwrap().value)
     }
+}
 
+impl NumericalValueReader {
     pub fn create() -> Box<Any> {
         let reader = NumericalValueReader {
-            value: u32::default(),
+            value: 0 as u32
         };
 
         Box::new(reader)
@@ -57,6 +59,6 @@ impl NumericalValueReader {
 impl NumericalValue {
     pub fn take_clone(&self) -> u32 {
         let value = self.value.borrow();
-        **value.downcast_ref::<u32>().as_ref().unwrap()
+        **value.downcast_ref().as_ref().unwrap()
     }
 }
